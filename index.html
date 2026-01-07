@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EDI CSV to XLSX Processor</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 10px auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 20px;
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 5px;
+            font-size: 1.8em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 30px 20px;
+            text-align: center;
+            background: #f8f9ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+
+        .upload-area:hover {
+            background: #eef1ff;
+            border-color: #764ba2;
+        }
+
+        .upload-area.dragover {
+            background: #e0e7ff;
+            border-color: #764ba2;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .upload-text {
+            font-size: 1em;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .upload-hint {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            background: #f0f4ff;
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .file-info.active {
+            display: block;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 3px;
+            font-size: 0.9em;
+        }
+
+        .file-stats {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        .progress-container {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .result-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f9ff;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result-container.active {
+            display: block;
+        }
+
+        .success-icon {
+            font-size: 2em;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .result-message {
+            text-align: center;
+            color: #333;
+            font-size: 0.95em;
+            margin-bottom: 15px;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 15px;
+            display: none;
+            font-size: 0.9em;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            border-radius: 5px;
+            font-size: 0.8em;
+        }
+
+        .info-box h3 {
+            color: #856404;
+            margin-bottom: 5px;
+            font-size: 0.95em;
+        }
+
+        .info-box ul {
+            margin: 0 0 0 18px;
+            padding: 0;
+            color: #856404;
+            line-height: 1.3;
+        }
+
+        .info-box li {
+            margin-bottom: 2px;
+        }
+
+        .info-box p {
+            margin: 5px 0 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 EDI CSV Processor</h1>
+        <p class="subtitle">Convert EDI CSV files to formatted XLSX with ADL duty calculations</p>
+
+        <div class="info-box">
+            <h3>Features:</h3>
+            <ul>
+                <li>Auto-processes files upon upload (no manual button click needed)</li>
+                <li>Only includes ADL columns that contain data (empty ADL sets are excluded)</li>
+                <li>Skips rows with blank HTS Code</li>
+                <li>Forward-fills Broker Ref # for continuity across entry lines</li>
+                <li>Adds totals row at the end for all currency columns</li>
+                <li>Creates HTS Summary sheet showing total duty amounts per HTS code</li>
+                <li>Filters enabled on both sheets</li>
+                <li>Currency columns formatted with $ sign</li>
+                <li>Duty rates shown as percentages</li>
+            </ul>
+            <p style="margin-top: 10px; font-style: italic; font-size: 0.85em;">💡 Tip: To add banded rows in Excel, select any cell in the data → Insert tab → Format as Table → choose a style with banding</p>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Click to upload or drag & drop your CSV file</div>
+            <div class="upload-hint">Supports CSV files in EDI format</div>
+            <input type="file" id="fileInput" accept=".csv">
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-stats" id="fileStats"></div>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div class="progress-text" id="progressText">Processing...</div>
+        </div>
+
+        <div class="result-container" id="resultContainer">
+            <div class="success-icon">✅</div>
+            <div class="result-message" id="resultMessage"></div>
+            <button class="download-btn" id="downloadBtn">Download XLSX File</button>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <script>
+        let uploadedData = null;
+        let processedWorkbook = null;
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileStats = document.getElementById('fileStats');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultMessage = document.getElementById('resultMessage');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Upload area click handler
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop handlers
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        // File input change handler
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // Download button click handler
+        downloadBtn.addEventListener('click', downloadFile);
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showError('Please upload a CSV file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    uploadedData = e.target.result;
+                    fileName.textContent = `File: ${file.name}`;
+                    fileStats.textContent = `Size: ${(file.size / 1024).toFixed(2)} KB`;
+                    fileInfo.classList.add('active');
+                    resultContainer.classList.remove('active');
+                    errorMessage.classList.remove('active');
+                    
+                    // Auto-process the file
+                    setTimeout(() => processFile(), 500);
+                } catch (error) {
+                    showError(`Error reading file: ${error.message}`);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const result = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                currentRow = [];
+                currentField = '';
+                inQuotes = false;
+
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    const nextChar = line[j + 1];
+
+                    if (char === '"') {
+                        if (inQuotes && nextChar === '"') {
+                            currentField += '"';
+                            j++;
+                        } else {
+                            inQuotes = !inQuotes;
+                        }
+                    } else if (char === ',' && !inQuotes) {
+                        currentRow.push(currentField);
+                        currentField = '';
+                    } else {
+                        currentField += char;
+                    }
+                }
+
+                currentRow.push(currentField);
+                
+                if (currentRow.some(field => field.trim() !== '')) {
+                    result.push(currentRow);
+                }
+            }
+
+            return result;
+        }
+
+        function processFile() {
+            try {
+                progressContainer.classList.add('active');
+                resultContainer.classList.remove('active');
+                errorMessage.classList.remove('active');
+                updateProgress(10, 'Parsing CSV file...');
+
+                const rows = parseCSV(uploadedData);
+                if (rows.length < 2) {
+                    throw new Error('CSV file appears to be empty or invalid');
+                }
+
+                updateProgress(30, 'Extracting data...');
+
+                const headers = rows[0];
+                const data = rows.slice(1);
+
+                // Find column indices - handle duplicate column names by using FIRST occurrence
+                const colIndex = {};
+                headers.forEach((header, index) => {
+                    const trimmedHeader = header.trim();
+                    // Only set if not already set (use first occurrence)
+                    if (!(trimmedHeader in colIndex)) {
+                        colIndex[trimmedHeader] = index;
+                    }
+                });
+
+                updateProgress(40, 'Detecting ADL columns with data...');
+
+                // Determine max ADL number
+                let maxADL = 0;
+                headers.forEach(header => {
+                    const match = header.match(/^ADL(\d+)_/);
+                    if (match) {
+                        maxADL = Math.max(maxADL, parseInt(match[1]));
+                    }
+                });
+
+                // Detect which ADL columns have actual data
+                const usedADL = new Set();
+                data.forEach(row => {
+                    for (let i = 1; i <= maxADL; i++) {
+                        const htsNum = row[colIndex[`ADL${i}_HTS_Number`]] || '';
+                        const htsDesc = row[colIndex[`ADL${i}_HTS_Description`]] || '';
+                        const dutyAmt = row[colIndex[`ADL${i}_DutyAmount1`]] || '';
+                        const tariffVal = row[colIndex[`ADL${i}_TariffValue`]] || '';
+                        
+                        if (htsNum.trim() || htsDesc.trim() || dutyAmt.trim() || tariffVal.trim()) {
+                            usedADL.add(i);
+                        }
+                    }
+                });
+
+                const sortedADL = Array.from(usedADL).sort((a, b) => a - b);
+                
+                updateProgress(50, 'Building output structure...');
+
+                // Build output columns
+                const outputColumns = [
+                    'Broker Ref #', 'Entry #', 'Country of Export', 'Export Date',
+                    'Country of Origin', 'Bill of Lading', 'Import Date',
+                    'Tariff Description', 'HTS Code', 'Entered Value',
+                    'Duty', 'HMF', 'MPF', 'Total Duty', 'Commercial Invoice Number'
+                ];
+
+                // Add only used ADL columns
+                sortedADL.forEach(i => {
+                    outputColumns.push(`ADL${i}_HTS_Number`);
+                    outputColumns.push(`ADL${i}_HTS_Description`);
+                    outputColumns.push(`ADL${i}_DutyRate1`);
+                    outputColumns.push(`ADL${i}_DutyAmount1`);
+                    outputColumns.push(`ADL${i}_TariffValue`);
+                });
+
+                // Add TOTAL DUTY2
+                outputColumns.push('TOTAL DUTY2');
+
+                updateProgress(60, 'Filtering and formatting data...');
+
+                // Build output data - filter out rows with blank HTS Code
+                const outputData = [outputColumns];
+                const filteredData = data.filter(row => {
+                    const htsCode = (row[colIndex['HTS Code']] || '').trim();
+                    return htsCode !== '';
+                });
+
+                // Track totals for currency columns
+                const totals = {};
+                const currencyColumns = ['Entered Value', 'Duty', 'HMF', 'MPF', 'Total Duty', 'TOTAL DUTY2'];
+                
+                // Add ADL currency columns
+                sortedADL.forEach(i => {
+                    currencyColumns.push(`ADL${i}_DutyAmount1`);
+                    currencyColumns.push(`ADL${i}_TariffValue`);
+                });
+
+                // Initialize totals
+                currencyColumns.forEach(col => totals[col] = 0);
+
+                // Forward-fill Broker Ref # and process each row
+                let lastBrokerRef = '';
+                const htsSummary = {};  // Track totals by HTS code
+
+                filteredData.forEach((row, rowIdx) => {
+                    if (rowIdx % 100 === 0) {
+                        updateProgress(60 + (rowIdx / filteredData.length) * 25, `Processing row ${rowIdx + 1} of ${filteredData.length}...`);
+                    }
+
+                    const outputRow = [];
+
+                    // Forward-fill Broker Ref #
+                    const brokerRefIdx = colIndex['Broker Ref #'];
+                    const brokerRefValue = brokerRefIdx !== undefined ? row[brokerRefIdx] : '';
+                    if (brokerRefValue && brokerRefValue.trim()) {
+                        lastBrokerRef = brokerRefValue.trim();
+                    }
+
+                    // Get HTS Code for summary
+                    const htsCodeIdx = colIndex['HTS Code'];
+                    const htsCode = htsCodeIdx !== undefined ? row[htsCodeIdx] : '';
+                    
+                    // Check if main Tariff Description starts with IEEPA
+                    const tariffDescIdx = colIndex['Tariff Description'];
+                    const tariffDesc = tariffDescIdx !== undefined ? row[tariffDescIdx] : '';
+                    if (htsCode && htsCode.toString().trim() && tariffDesc && tariffDesc.toString().trim().toUpperCase().startsWith('IEEPA')) {
+                        const mainHtsCode = htsCode.toString().trim();
+                        if (!htsSummary[mainHtsCode]) {
+                            htsSummary[mainHtsCode] = {
+                                dutyAmount: 0,
+                                count: 0
+                            };
+                        }
+                        const dutyValue = parseFloat((row[colIndex['Duty']] || '').toString().replace(/[,$]/g, '')) || 0;
+                        htsSummary[mainHtsCode].dutyAmount += dutyValue;
+                        htsSummary[mainHtsCode].count += 1;
+                    }
+
+                    // Add standard columns
+                    outputColumns.slice(0, 15).forEach(col => {
+                        const idx = colIndex[col];
+                        let value = idx !== undefined ? row[idx] : '';
+                        
+                        // Use forward-filled Broker Ref # if current value is blank
+                        if (col === 'Broker Ref #' && (!value || !value.trim())) {
+                            value = lastBrokerRef;
+                        }
+                        
+                        outputRow.push(value);
+                        
+                        // Add to totals if currency column
+                        if (currencyColumns.includes(col)) {
+                            const numVal = parseFloat((value || '').toString().replace(/[,$]/g, '')) || 0;
+                            totals[col] += numVal;
+                        }
+                    });
+
+                    // Calculate TOTAL DUTY2
+                    let totalDuty2 = 0;
+                    const totalDutyValue = parseFloat((row[colIndex['Total Duty']] || '').toString().replace(/,/g, '')) || 0;
+                    totalDuty2 += totalDutyValue;
+
+                    // Add only used ADL columns
+                    sortedADL.forEach(i => {
+                        const htsNumCol = `ADL${i}_HTS_Number`;
+                        const htsDescCol = `ADL${i}_HTS_Description`;
+                        const dutyRateCol = `ADL${i}_DutyRate1`;
+                        const dutyAmtCol = `ADL${i}_DutyAmount1`;
+                        const tariffValCol = `ADL${i}_TariffValue`;
+
+                        const htsNum = colIndex[htsNumCol] !== undefined ? row[colIndex[htsNumCol]] : '';
+                        const htsDesc = colIndex[htsDescCol] !== undefined ? row[colIndex[htsDescCol]] : '';
+                        const dutyRate = colIndex[dutyRateCol] !== undefined ? row[colIndex[dutyRateCol]] : '';
+                        const dutyAmt = colIndex[dutyAmtCol] !== undefined ? row[colIndex[dutyAmtCol]] : '';
+                        const tariffVal = colIndex[tariffValCol] !== undefined ? row[colIndex[tariffValCol]] : '';
+
+                        // Track this ADL HTS code in summary if it has IEEPA description
+                        if (htsNum && htsNum.toString().trim() && htsDesc && htsDesc.toString().trim().toUpperCase().startsWith('IEEPA')) {
+                            const adlHtsCode = htsNum.toString().trim();
+                            if (!htsSummary[adlHtsCode]) {
+                                htsSummary[adlHtsCode] = {
+                                    dutyAmount: 0,
+                                    count: 0
+                                };
+                            }
+                            const dutyAmtNum = parseFloat((dutyAmt || '').toString().replace(/[,$]/g, '')) || 0;
+                            htsSummary[adlHtsCode].dutyAmount += dutyAmtNum;
+                            htsSummary[adlHtsCode].count += 1;
+                        }
+
+                        outputRow.push(htsNum);
+                        outputRow.push(htsDesc);
+                        outputRow.push(dutyRate);
+                        outputRow.push(dutyAmt);
+                        outputRow.push(tariffVal);
+
+                        // Add to totals and TOTAL DUTY2
+                        const dutyAmtNum = parseFloat((dutyAmt || '').toString().replace(/,/g, '')) || 0;
+                        const tariffValNum = parseFloat((tariffVal || '').toString().replace(/,/g, '')) || 0;
+                        
+                        totals[dutyAmtCol] = (totals[dutyAmtCol] || 0) + dutyAmtNum;
+                        totals[tariffValCol] = (totals[tariffValCol] || 0) + tariffValNum;
+                        totalDuty2 += dutyAmtNum;
+                    });
+
+                    // Add TOTAL DUTY2
+                    outputRow.push(totalDuty2);
+                    totals['TOTAL DUTY2'] += totalDuty2;
+
+                    outputData.push(outputRow);
+                });
+
+                // Add totals row
+                const totalsRow = [];
+                outputColumns.forEach((col, idx) => {
+                    if (idx === 0) {
+                        totalsRow.push('TOTALS');
+                    } else if (currencyColumns.includes(col)) {
+                        totalsRow.push(totals[col] || 0);
+                    } else {
+                        totalsRow.push('');
+                    }
+                });
+                outputData.push(totalsRow);
+
+                updateProgress(85, 'Creating Excel file...');
+
+                // Create workbook
+                const ws = XLSX.utils.aoa_to_sheet(outputData);
+
+                // Get column letters for formatting
+                const getColLetter = (index) => {
+                    let letter = '';
+                    while (index >= 0) {
+                        letter = String.fromCharCode((index % 26) + 65) + letter;
+                        index = Math.floor(index / 26) - 1;
+                    }
+                    return letter;
+                };
+
+                // Apply formatting
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                
+                // Find currency and percentage columns
+                const currencyCols = [];
+                const percentCols = [];
+                
+                outputColumns.forEach((col, idx) => {
+                    if (currencyColumns.includes(col)) {
+                        currencyCols.push(idx);
+                    }
+                    if (col.includes('DutyRate')) {
+                        percentCols.push(idx);
+                    }
+                });
+
+                // Apply cell formatting with xlsx-js-style
+                for (let R = range.s.r; R <= range.e.r; ++R) {
+                    for (let C = range.s.c; C <= range.e.c; ++C) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        if (!ws[cellAddress]) continue;
+
+                        // Initialize cell style
+                        ws[cellAddress].s = {
+                            alignment: { vertical: 'center', horizontal: 'left' },
+                            border: {
+                                top: { style: 'thin', color: { rgb: 'D0D0D0' } },
+                                bottom: { style: 'thin', color: { rgb: 'D0D0D0' } },
+                                left: { style: 'thin', color: { rgb: 'D0D0D0' } },
+                                right: { style: 'thin', color: { rgb: 'D0D0D0' } }
+                            }
+                        };
+
+                        // Apply row banding (alternating colors) - skip header (row 0) and totals row (last row)
+                        if (R > 0 && R < range.e.r) {
+                            // Even rows get light gray background
+                            if (R % 2 === 0) {
+                                ws[cellAddress].s.fill = {
+                                    fgColor: { rgb: 'F2F2F2' }
+                                };
+                            } else {
+                                ws[cellAddress].s.fill = {
+                                    fgColor: { rgb: 'FFFFFF' }
+                                };
+                            }
+                        }
+                        
+                        // Header row - bold with blue background and white text
+                        if (R === 0) {
+                            ws[cellAddress].s.font = { bold: true, color: { rgb: 'FFFFFF' } };
+                            ws[cellAddress].s.fill = {
+                                fgColor: { rgb: '4472C4' }
+                            };
+                            ws[cellAddress].s.alignment = { vertical: 'center', horizontal: 'center' };
+                        }
+                        
+                        // Totals row - bold with yellow background
+                        if (R === range.e.r) {
+                            ws[cellAddress].s.font = { bold: true };
+                            ws[cellAddress].s.fill = {
+                                fgColor: { rgb: 'FFD966' }
+                            };
+                        }
+
+                        // Format currency columns
+                        if (currencyCols.includes(C) && R > 0) {
+                            const value = ws[cellAddress].v;
+                            if (value !== '' && value !== null && value !== undefined) {
+                                const numValue = parseFloat(value.toString().replace(/[,$]/g, ''));
+                                if (!isNaN(numValue)) {
+                                    ws[cellAddress].t = 'n';
+                                    ws[cellAddress].v = numValue;
+                                    ws[cellAddress].z = '$#,##0.00';
+                                }
+                            }
+                        }
+
+                        // Format percentage columns
+                        if (percentCols.includes(C) && R > 0 && R < range.e.r) {
+                            const value = ws[cellAddress].v;
+                            if (value !== '' && value !== null && value !== undefined) {
+                                const numValue = parseFloat(value.toString().replace(/[%,]/g, ''));
+                                if (!isNaN(numValue)) {
+                                    ws[cellAddress].t = 'n';
+                                    ws[cellAddress].v = numValue;
+                                    ws[cellAddress].z = '0.00%';
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Set column widths
+                const colWidths = outputColumns.map(col => {
+                    if (col.includes('Description')) return { wch: 40 };
+                    if (col.includes('HTS')) return { wch: 15 };
+                    if (col.includes('Date')) return { wch: 12 };
+                    return { wch: 15 };
+                });
+                ws['!cols'] = colWidths;
+
+                // Add autofilter
+                ws['!autofilter'] = { ref: XLSX.utils.encode_range({
+                    s: { r: 0, c: 0 },
+                    e: { r: outputData.length - 2, c: outputColumns.length - 1 }
+                }) };
+
+                // Create workbook
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'EDI Data');
+
+                updateProgress(95, 'Creating IEEPA Summary sheet...');
+
+                // Create IEEPA Summary sheet with only HTS Code, Count, Duty Amount
+                const htsSummaryData = [['HTS Code', 'Count', 'Duty Amount']];
+                
+                // Sort HTS codes
+                const sortedHTS = Object.keys(htsSummary).sort();
+                
+                sortedHTS.forEach(htsCode => {
+                    const summary = htsSummary[htsCode];
+                    htsSummaryData.push([
+                        htsCode,
+                        summary.count,
+                        summary.dutyAmount
+                    ]);
+                });
+
+                // Add grand totals
+                const grandTotals = sortedHTS.reduce((acc, htsCode) => {
+                    const summary = htsSummary[htsCode];
+                    acc.count += summary.count;
+                    acc.dutyAmount += summary.dutyAmount;
+                    return acc;
+                }, { count: 0, dutyAmount: 0 });
+
+                htsSummaryData.push(['GRAND TOTAL', grandTotals.count, grandTotals.dutyAmount]);
+
+                const wsSummary = XLSX.utils.aoa_to_sheet(htsSummaryData);
+
+                // Format HTS Summary sheet
+                const summaryRange = XLSX.utils.decode_range(wsSummary['!ref']);
+                
+                for (let R = summaryRange.s.r; R <= summaryRange.e.r; ++R) {
+                    for (let C = summaryRange.s.c; C <= summaryRange.e.c; ++C) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        if (!wsSummary[cellAddress]) continue;
+
+                        // Initialize cell style
+                        wsSummary[cellAddress].s = {
+                            alignment: { vertical: 'center', horizontal: 'left' },
+                            border: {
+                                top: { style: 'thin', color: { rgb: 'D0D0D0' } },
+                                bottom: { style: 'thin', color: { rgb: 'D0D0D0' } },
+                                left: { style: 'thin', color: { rgb: 'D0D0D0' } },
+                                right: { style: 'thin', color: { rgb: 'D0D0D0' } }
+                            }
+                        };
+
+                        // Apply row banding (alternating colors) - skip header (row 0) and grand total row (last row)
+                        if (R > 0 && R < summaryRange.e.r) {
+                            // Even rows get light gray background
+                            if (R % 2 === 0) {
+                                wsSummary[cellAddress].s.fill = {
+                                    fgColor: { rgb: 'F2F2F2' }
+                                };
+                            } else {
+                                wsSummary[cellAddress].s.fill = {
+                                    fgColor: { rgb: 'FFFFFF' }
+                                };
+                            }
+                        }
+                        
+                        // Header row - bold with blue background and white text
+                        if (R === 0) {
+                            wsSummary[cellAddress].s.font = { bold: true, color: { rgb: 'FFFFFF' } };
+                            wsSummary[cellAddress].s.fill = {
+                                fgColor: { rgb: '4472C4' }
+                            };
+                            wsSummary[cellAddress].s.alignment = { vertical: 'center', horizontal: 'center' };
+                        }
+                        
+                        // Grand Total row - bold with yellow background
+                        if (R === summaryRange.e.r) {
+                            wsSummary[cellAddress].s.font = { bold: true };
+                            wsSummary[cellAddress].s.fill = {
+                                fgColor: { rgb: 'FFD966' }
+                            };
+                        }
+
+                        // Format currency column (column 2 = Duty Amount)
+                        if (C === 2 && R > 0) {
+                            const value = wsSummary[cellAddress].v;
+                            if (value !== '' && value !== null && value !== undefined) {
+                                const numValue = parseFloat(value.toString().replace(/[,$]/g, ''));
+                                if (!isNaN(numValue)) {
+                                    wsSummary[cellAddress].t = 'n';
+                                    wsSummary[cellAddress].v = numValue;
+                                    wsSummary[cellAddress].z = '$#,##0.00';
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Set column widths for summary sheet
+                wsSummary['!cols'] = [
+                    { wch: 15 },  // HTS Code
+                    { wch: 10 },  // Count
+                    { wch: 15 }   // Duty Amount
+                ];
+
+                // Add autofilter to summary sheet
+                wsSummary['!autofilter'] = { 
+                    ref: XLSX.utils.encode_range({
+                        s: { r: 0, c: 0 },
+                        e: { r: htsSummaryData.length - 2, c: 2 }  // Exclude grand total from filter
+                    })
+                };
+
+                XLSX.utils.book_append_sheet(wb, wsSummary, 'IEEPA Summary');
+
+                processedWorkbook = wb;
+
+                updateProgress(100, 'Complete!');
+
+                setTimeout(() => {
+                    progressContainer.classList.remove('active');
+                    resultContainer.classList.add('active');
+                    resultMessage.textContent = `Successfully processed ${filteredData.length} rows (${data.length - filteredData.length} blank HTS rows skipped) with ${sortedADL.length} ADL column sets. Created IEEPA Summary with ${Object.keys(htsSummary).length} unique IEEPA HTS codes.`;
+                }, 500);
+
+            } catch (error) {
+                progressContainer.classList.remove('active');
+                showError(`Error processing file: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        function updateProgress(percent, text) {
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = Math.round(percent) + '%';
+            progressText.textContent = text;
+        }
+
+        function downloadFile() {
+            try {
+                const originalName = fileName.textContent.replace('File: ', '').replace('.csv', '');
+                const outputName = `${originalName}_processed.xlsx`;
+                XLSX.writeFile(processedWorkbook, outputName);
+            } catch (error) {
+                showError(`Error downloading file: ${error.message}`);
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('active');
+            setTimeout(() => {
+                errorMessage.classList.remove('active');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
