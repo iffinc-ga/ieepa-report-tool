@@ -520,11 +520,18 @@
                     const htsCodeIdx = colIndex['HTS Code'];
                     const htsCode = htsCodeIdx !== undefined ? row[htsCodeIdx] : '';
                     
-                    // Check if main Tariff Description starts with IEEPA
+                    // List of specific HTS codes to always include
+                    const specificHtsCodes = ['99030101', '99030110', '99030124'];
+                    
+                    // Check if main Tariff Description starts with IEEPA OR if it's one of the specific HTS codes
                     const tariffDescIdx = colIndex['Tariff Description'];
                     const tariffDesc = tariffDescIdx !== undefined ? row[tariffDescIdx] : '';
-                    if (htsCode && htsCode.toString().trim() && tariffDesc && tariffDesc.toString().trim().toUpperCase().startsWith('IEEPA')) {
-                        const mainHtsCode = htsCode.toString().trim();
+                    const mainHtsCode = htsCode ? htsCode.toString().trim() : '';
+                    
+                    const hasIeepaDesc = tariffDesc && tariffDesc.toString().trim().toUpperCase().startsWith('IEEPA');
+                    const isSpecificCode = specificHtsCodes.includes(mainHtsCode);
+                    
+                    if (mainHtsCode && (hasIeepaDesc || isSpecificCode)) {
                         if (!htsSummary[mainHtsCode]) {
                             htsSummary[mainHtsCode] = {
                                 dutyAmount: 0,
@@ -574,9 +581,12 @@
                         const dutyAmt = colIndex[dutyAmtCol] !== undefined ? row[colIndex[dutyAmtCol]] : '';
                         const tariffVal = colIndex[tariffValCol] !== undefined ? row[colIndex[tariffValCol]] : '';
 
-                        // Track this ADL HTS code in summary if it has IEEPA description
-                        if (htsNum && htsNum.toString().trim() && htsDesc && htsDesc.toString().trim().toUpperCase().startsWith('IEEPA')) {
-                            const adlHtsCode = htsNum.toString().trim();
+                        // Track this ADL HTS code in summary if it has IEEPA description OR is one of the specific codes
+                        const adlHtsCode = htsNum ? htsNum.toString().trim() : '';
+                        const hasIeepaDesc = htsDesc && htsDesc.toString().trim().toUpperCase().startsWith('IEEPA');
+                        const isSpecificCode = specificHtsCodes.includes(adlHtsCode);
+                        
+                        if (adlHtsCode && (hasIeepaDesc || isSpecificCode)) {
                             if (!htsSummary[adlHtsCode]) {
                                 htsSummary[adlHtsCode] = {
                                     dutyAmount: 0,
