@@ -222,43 +222,28 @@
             margin: 0 0 0 18px;
             padding: 0;
             color: #856404;
-            line-height: 1.3;
-        }
-
-        .info-box li {
-            margin-bottom: 2px;
-        }
-
-        .info-box p {
-            margin: 5px 0 0 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📊 EDI CSV Processor</h1>
-        <p class="subtitle">Convert EDI CSV files to formatted XLSX with ADL duty calculations</p>
-
+        <h1>📊 EDI CSV to XLSX Processor</h1>
+        <p class="subtitle">Upload EDI CSV to create formatted Excel with expanded ADL lines</p>
+        
         <div class="info-box">
-            <h3>Features:</h3>
+            <h3>ℹ️ Features:</h3>
             <ul>
-                <li>Auto-processes files upon upload (no manual button click needed)</li>
-                <li>Only includes ADL columns that contain data (empty ADL sets are excluded)</li>
-                <li>Skips rows with blank HTS Code</li>
-                <li>Forward-fills Broker Ref # for continuity across entry lines</li>
-                <li>Adds totals row at the end for all currency columns</li>
-                <li>Creates HTS Summary sheet showing total duty amounts per HTS code</li>
-                <li>Filters enabled on both sheets</li>
-                <li>Currency columns formatted with $ sign</li>
-                <li>Duty rates shown as percentages</li>
+                <li>Expands ADL lines (ADL1, ADL2, etc.) into separate rows</li>
+                <li>Preserves key entry data for each ADL line</li>
+                <li>Professional formatting with row banding</li>
+                <li>Includes Liquidation Date as last column</li>
             </ul>
-            <p style="margin-top: 10px; font-style: italic; font-size: 0.85em;">💡 Tip: To add banded rows in Excel, select any cell in the data → Insert tab → Format as Table → choose a style with banding</p>
         </div>
 
         <div class="upload-area" id="uploadArea">
             <div class="upload-icon">📁</div>
-            <div class="upload-text">Click to upload or drag & drop your CSV file</div>
-            <div class="upload-hint">Supports CSV files in EDI format</div>
+            <div class="upload-text">Click to select or drag & drop your CSV file</div>
+            <div class="upload-hint">Supports EDI CSV format</div>
             <input type="file" id="fileInput" accept=".csv">
         </div>
 
@@ -277,16 +262,13 @@
         <div class="result-container" id="resultContainer">
             <div class="success-icon">✅</div>
             <div class="result-message" id="resultMessage"></div>
-            <button class="download-btn" id="downloadBtn">Download XLSX File</button>
+            <button class="download-btn" onclick="downloadFile()">⬇️ Download XLSX</button>
         </div>
 
         <div class="error-message" id="errorMessage"></div>
     </div>
 
     <script>
-        let uploadedData = null;
-        let processedWorkbook = null;
-
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
@@ -297,10 +279,11 @@
         const progressText = document.getElementById('progressText');
         const resultContainer = document.getElementById('resultContainer');
         const resultMessage = document.getElementById('resultMessage');
-        const downloadBtn = document.getElementById('downloadBtn');
         const errorMessage = document.getElementById('errorMessage');
 
-        // Upload area click handler
+        let processedWorkbook = null;
+
+        // Click to upload
         uploadArea.addEventListener('click', () => fileInput.click());
 
         // Drag and drop handlers
@@ -316,355 +299,193 @@
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.csv')) {
+                handleFile(file);
+            } else {
+                showError('Please upload a CSV file');
             }
         });
 
-        // File input change handler
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
             }
         });
-
-        // Download button click handler
-        downloadBtn.addEventListener('click', downloadFile);
 
         function handleFile(file) {
-            if (!file.name.toLowerCase().endsWith('.csv')) {
-                showError('Please upload a CSV file');
-                return;
-            }
-
+            fileName.textContent = `File: ${file.name}`;
+            fileStats.textContent = `Size: ${(file.size / 1024).toFixed(2)} KB`;
+            fileInfo.classList.add('active');
+            
+            resultContainer.classList.remove('active');
+            
             const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    uploadedData = e.target.result;
-                    fileName.textContent = `File: ${file.name}`;
-                    fileStats.textContent = `Size: ${(file.size / 1024).toFixed(2)} KB`;
-                    fileInfo.classList.add('active');
-                    resultContainer.classList.remove('active');
-                    errorMessage.classList.remove('active');
-                    
-                    // Auto-process the file
-                    setTimeout(() => processFile(), 500);
-                } catch (error) {
-                    showError(`Error reading file: ${error.message}`);
-                }
-            };
+            reader.onload = (e) => processCSV(e.target.result);
             reader.readAsText(file);
         }
 
-        function parseCSV(text) {
-            const lines = text.split('\n');
-            const result = [];
-            let currentRow = [];
-            let currentField = '';
-            let inQuotes = false;
-
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
-                currentRow = [];
-                currentField = '';
-                inQuotes = false;
-
-                for (let j = 0; j < line.length; j++) {
-                    const char = line[j];
-                    const nextChar = line[j + 1];
-
-                    if (char === '"') {
-                        if (inQuotes && nextChar === '"') {
-                            currentField += '"';
-                            j++;
-                        } else {
-                            inQuotes = !inQuotes;
-                        }
-                    } else if (char === ',' && !inQuotes) {
-                        currentRow.push(currentField);
-                        currentField = '';
-                    } else {
-                        currentField += char;
-                    }
-                }
-
-                currentRow.push(currentField);
-                
-                if (currentRow.some(field => field.trim() !== '')) {
-                    result.push(currentRow);
-                }
-            }
-
-            return result;
-        }
-
-        function processFile() {
+        function processCSV(csvText) {
             try {
                 progressContainer.classList.add('active');
-                resultContainer.classList.remove('active');
-                errorMessage.classList.remove('active');
-                updateProgress(10, 'Parsing CSV file...');
+                updateProgress(10, 'Parsing CSV...');
 
-                const rows = parseCSV(uploadedData);
-                if (rows.length < 2) {
-                    throw new Error('CSV file appears to be empty or invalid');
-                }
-
-                updateProgress(30, 'Extracting data...');
-
-                const headers = rows[0];
-                const data = rows.slice(1);
-
-                // Find column indices - handle duplicate column names by using FIRST occurrence
-                const colIndex = {};
-                headers.forEach((header, index) => {
-                    const trimmedHeader = header.trim();
-                    // Only set if not already set (use first occurrence)
-                    if (!(trimmedHeader in colIndex)) {
-                        colIndex[trimmedHeader] = index;
-                    }
-                });
-
-                updateProgress(40, 'Detecting ADL columns with data...');
-
-                // Determine max ADL number
-                let maxADL = 0;
-                headers.forEach(header => {
-                    const match = header.match(/^ADL(\d+)_/);
-                    if (match) {
-                        maxADL = Math.max(maxADL, parseInt(match[1]));
-                    }
-                });
-
-                // Detect which ADL columns have actual data
-                const usedADL = new Set();
-                data.forEach(row => {
-                    for (let i = 1; i <= maxADL; i++) {
-                        const htsNum = row[colIndex[`ADL${i}_HTS_Number`]] || '';
-                        const htsDesc = row[colIndex[`ADL${i}_HTS_Description`]] || '';
-                        const dutyAmt = row[colIndex[`ADL${i}_DutyAmount1`]] || '';
-                        const tariffVal = row[colIndex[`ADL${i}_TariffValue`]] || '';
-                        
-                        if (htsNum.trim() || htsDesc.trim() || dutyAmt.trim() || tariffVal.trim()) {
-                            usedADL.add(i);
-                        }
-                    }
-                });
-
-                const sortedADL = Array.from(usedADL).sort((a, b) => a - b);
+                // Parse CSV
+                const lines = csvText.split('\n');
+                const headers = lines[0].split(',');
                 
-                updateProgress(50, 'Building output structure...');
+                updateProgress(20, 'Processing data...');
 
-                // Build output columns
+                // Find column indices
+                const colMap = {};
+                headers.forEach((header, idx) => {
+                    colMap[header.trim()] = idx;
+                });
+
+                // Define output columns
                 const outputColumns = [
-                    'Broker Ref #', 'Entry #', 'Country of Export', 'Export Date',
-                    'Country of Origin', 'Bill of Lading', 'Import Date',
-                    'Tariff Description', 'HTS Code', 'Entered Value',
-                    'Duty', 'HMF', 'MPF', 'Total Duty', 'Commercial Invoice Number'
+                    'Broker Ref #',
+                    'Entry #',
+                    'Export Country',
+                    'Export Date',
+                    'Origin Country',
+                    'Entry Date',
+                    'Bill of Lading',
+                    'Tariff Description',
+                    'HTS Code',
+                    'Entered Value',
+                    'Duty',
+                    'Commercial Invoice Number',
+                    'Liquidation Date'
                 ];
 
-                // Add only used ADL columns
-                sortedADL.forEach(i => {
-                    outputColumns.push(`ADL${i}_HTS_Number`);
-                    outputColumns.push(`ADL${i}_HTS_Description`);
-                    outputColumns.push(`ADL${i}_DutyRate1`);
-                    outputColumns.push(`ADL${i}_DutyAmount1`);
-                    outputColumns.push(`ADL${i}_TariffValue`);
-                });
-
-                // Add TOTAL DUTY2
-                outputColumns.push('TOTAL DUTY2');
-
-                updateProgress(60, 'Filtering and formatting data...');
-
-                // Build output data - filter out rows with blank HTS Code
-                const outputData = [outputColumns];
-                const filteredData = data.filter(row => {
-                    const htsCode = (row[colIndex['HTS Code']] || '').trim();
-                    return htsCode !== '';
-                });
-
-                // Track totals for currency columns
-                const totals = {};
-                const currencyColumns = ['Entered Value', 'Duty', 'HMF', 'MPF', 'Total Duty', 'TOTAL DUTY2'];
-                
-                // Add ADL currency columns
-                sortedADL.forEach(i => {
-                    currencyColumns.push(`ADL${i}_DutyAmount1`);
-                    currencyColumns.push(`ADL${i}_TariffValue`);
-                });
-
-                // Initialize totals
-                currencyColumns.forEach(col => totals[col] = 0);
-
-                // Forward-fill Broker Ref # and process each row
-                let lastBrokerRef = '';
-                const htsSummary = {};  // Track totals by HTS code
-
-                filteredData.forEach((row, rowIdx) => {
-                    if (rowIdx % 100 === 0) {
-                        updateProgress(60 + (rowIdx / filteredData.length) * 25, `Processing row ${rowIdx + 1} of ${filteredData.length}...`);
-                    }
-
-                    const outputRow = [];
-
-                    // Forward-fill Broker Ref #
-                    const brokerRefIdx = colIndex['Broker Ref #'];
-                    const brokerRefValue = brokerRefIdx !== undefined ? row[brokerRefIdx] : '';
-                    if (brokerRefValue && brokerRefValue.trim()) {
-                        lastBrokerRef = brokerRefValue.trim();
-                    }
-
-                    // Get HTS Code for summary
-                    const htsCodeIdx = colIndex['HTS Code'];
-                    const htsCode = htsCodeIdx !== undefined ? row[htsCodeIdx] : '';
-                    
-                    // List of specific HTS codes to always include
-                    const specificHtsCodes = ['99030101', '99030110', '99030124'];
-                    
-                    // Check if main Tariff Description starts with IEEPA OR if it's one of the specific HTS codes
-                    const tariffDescIdx = colIndex['Tariff Description'];
-                    const tariffDesc = tariffDescIdx !== undefined ? row[tariffDescIdx] : '';
-                    const mainHtsCode = htsCode ? htsCode.toString().trim() : '';
-                    
-                    const hasIeepaDesc = tariffDesc && tariffDesc.toString().trim().toUpperCase().startsWith('IEEPA');
-                    const isSpecificCode = specificHtsCodes.includes(mainHtsCode);
-                    
-                    if (mainHtsCode && (hasIeepaDesc || isSpecificCode)) {
-                        if (!htsSummary[mainHtsCode]) {
-                            htsSummary[mainHtsCode] = {
-                                dutyAmount: 0,
-                                count: 0
-                            };
-                        }
-                        const dutyValue = parseFloat((row[colIndex['Duty']] || '').toString().replace(/[,$]/g, '')) || 0;
-                        htsSummary[mainHtsCode].dutyAmount += dutyValue;
-                        htsSummary[mainHtsCode].count += 1;
-                    }
-
-                    // Add standard columns
-                    outputColumns.slice(0, 15).forEach(col => {
-                        const idx = colIndex[col];
-                        let value = idx !== undefined ? row[idx] : '';
-                        
-                        // Use forward-filled Broker Ref # if current value is blank
-                        if (col === 'Broker Ref #' && (!value || !value.trim())) {
-                            value = lastBrokerRef;
-                        }
-                        
-                        outputRow.push(value);
-                        
-                        // Add to totals if currency column
-                        if (currencyColumns.includes(col)) {
-                            const numVal = parseFloat((value || '').toString().replace(/[,$]/g, '')) || 0;
-                            totals[col] += numVal;
-                        }
-                    });
-
-                    // Calculate TOTAL DUTY2
-                    let totalDuty2 = 0;
-                    const totalDutyValue = parseFloat((row[colIndex['Total Duty']] || '').toString().replace(/,/g, '')) || 0;
-                    totalDuty2 += totalDutyValue;
-
-                    // Add only used ADL columns
-                    sortedADL.forEach(i => {
-                        const htsNumCol = `ADL${i}_HTS_Number`;
-                        const htsDescCol = `ADL${i}_HTS_Description`;
-                        const dutyRateCol = `ADL${i}_DutyRate1`;
-                        const dutyAmtCol = `ADL${i}_DutyAmount1`;
-                        const tariffValCol = `ADL${i}_TariffValue`;
-
-                        const htsNum = colIndex[htsNumCol] !== undefined ? row[colIndex[htsNumCol]] : '';
-                        const htsDesc = colIndex[htsDescCol] !== undefined ? row[colIndex[htsDescCol]] : '';
-                        const dutyRate = colIndex[dutyRateCol] !== undefined ? row[colIndex[dutyRateCol]] : '';
-                        const dutyAmt = colIndex[dutyAmtCol] !== undefined ? row[colIndex[dutyAmtCol]] : '';
-                        const tariffVal = colIndex[tariffValCol] !== undefined ? row[colIndex[tariffValCol]] : '';
-
-                        // Track this ADL HTS code in summary if it has IEEPA description OR is one of the specific codes
-                        const adlHtsCode = htsNum ? htsNum.toString().trim() : '';
-                        const hasIeepaDesc = htsDesc && htsDesc.toString().trim().toUpperCase().startsWith('IEEPA');
-                        const isSpecificCode = specificHtsCodes.includes(adlHtsCode);
-                        
-                        if (adlHtsCode && (hasIeepaDesc || isSpecificCode)) {
-                            if (!htsSummary[adlHtsCode]) {
-                                htsSummary[adlHtsCode] = {
-                                    dutyAmount: 0,
-                                    count: 0
-                                };
-                            }
-                            const dutyAmtNum = parseFloat((dutyAmt || '').toString().replace(/[,$]/g, '')) || 0;
-                            htsSummary[adlHtsCode].dutyAmount += dutyAmtNum;
-                            htsSummary[adlHtsCode].count += 1;
-                        }
-
-                        outputRow.push(htsNum);
-                        outputRow.push(htsDesc);
-                        outputRow.push(dutyRate);
-                        outputRow.push(dutyAmt);
-                        outputRow.push(tariffVal);
-
-                        // Add to totals and TOTAL DUTY2
-                        const dutyAmtNum = parseFloat((dutyAmt || '').toString().replace(/,/g, '')) || 0;
-                        const tariffValNum = parseFloat((tariffVal || '').toString().replace(/,/g, '')) || 0;
-                        
-                        totals[dutyAmtCol] = (totals[dutyAmtCol] || 0) + dutyAmtNum;
-                        totals[tariffValCol] = (totals[tariffValCol] || 0) + tariffValNum;
-                        totalDuty2 += dutyAmtNum;
-                    });
-
-                    // Add TOTAL DUTY2
-                    outputRow.push(totalDuty2);
-                    totals['TOTAL DUTY2'] += totalDuty2;
-
-                    outputData.push(outputRow);
-                });
-
-                // Add totals row
-                const totalsRow = [];
-                outputColumns.forEach((col, idx) => {
-                    if (idx === 0) {
-                        totalsRow.push('TOTALS');
-                    } else if (currencyColumns.includes(col)) {
-                        totalsRow.push(totals[col] || 0);
-                    } else {
-                        totalsRow.push('');
-                    }
-                });
-                outputData.push(totalsRow);
-
-                updateProgress(85, 'Creating Excel file...');
-
-                // Create workbook
-                const ws = XLSX.utils.aoa_to_sheet(outputData);
-
-                // Get column letters for formatting
-                const getColLetter = (index) => {
-                    let letter = '';
-                    while (index >= 0) {
-                        letter = String.fromCharCode((index % 26) + 65) + letter;
-                        index = Math.floor(index / 26) - 1;
-                    }
-                    return letter;
+                // Map CSV columns to output columns
+                const columnMapping = {
+                    'Broker Ref #': 'BROKERREFERENCE',
+                    'Entry #': 'ENTRYNUMBER',
+                    'Export Country': 'COUNTRYOFEXPORT',
+                    'Export Date': 'DATEOFEXPORT',
+                    'Origin Country': 'COUNTRYOFORIGIN',
+                    'Entry Date': 'ENTRYDATE',
+                    'Bill of Lading': 'MASTERBILLNUMBERS',
+                    'Tariff Description': 'HTS_DESCRIPTION',
+                    'HTS Code': 'HTS_NUMBER',
+                    'Entered Value': 'ENTEREDVALUE',
+                    'Duty': 'ADVALOREMDUTYAMOUNT',
+                    'Commercial Invoice Number': 'INVOICENUMBER',
+                    'Liquidation Date': 'LIQUIDATIONDATE'
                 };
 
-                // Apply formatting
+                updateProgress(30, 'Building output data...');
+
+                const outputData = [outputColumns];
+
+                // Process each data row
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+
+                    const values = lines[i].split(',');
+                    
+                    // Get base row data
+                    const baseRow = {};
+                    for (const [outputCol, csvCol] of Object.entries(columnMapping)) {
+                        const idx = colMap[csvCol];
+                        baseRow[outputCol] = idx !== undefined ? (values[idx] || '').trim() : '';
+                    }
+                    
+                    // Special processing for Entry # - concatenate EF4 with numeric-only ENTRYNUMBER
+                    if (baseRow['Entry #']) {
+                        const numericOnly = baseRow['Entry #'].replace(/[^0-9]/g, '');
+                        baseRow['Entry #'] = 'EF4' + numericOnly;
+                    }
+
+                    // Add main HTS line
+                    const mainRow = [...outputColumns.map(col => baseRow[col])];
+                    outputData.push(mainRow);
+
+                    // Check for ADL lines
+                    let adlCount = 0;
+                    for (let adlNum = 1; adlNum <= 7; adlNum++) {
+                        const adlHtsCol = `ADL${adlNum}_HTS_NUMBER`;
+                        const adlHtsIdx = colMap[adlHtsCol];
+                        
+                        if (adlHtsIdx !== undefined) {
+                            const adlHts = (values[adlHtsIdx] || '').trim();
+                            
+                            if (adlHts) {
+                                adlCount++;
+                                
+                                // Get ADL description
+                                const adlDescCol = `ADL${adlNum}_HTS_DESCRIPTION`;
+                                const adlDescIdx = colMap[adlDescCol];
+                                const adlDesc = adlDescIdx !== undefined ? (values[adlDescIdx] || '').trim() : '';
+                                
+                                // Get ADL duty
+                                const adlDutyCol = `ADL${adlNum}_DUTY`;
+                                const adlDutyIdx = colMap[adlDutyCol];
+                                const adlDuty = adlDutyIdx !== undefined ? (values[adlDutyIdx] || '').trim() : '';
+                                
+                                // Create ADL row with repeated base data
+                                const adlRow = [
+                                    baseRow['Broker Ref #'],
+                                    baseRow['Entry #'],
+                                    baseRow['Export Country'],
+                                    baseRow['Export Date'],
+                                    baseRow['Origin Country'],
+                                    baseRow['Entry Date'],
+                                    baseRow['Bill of Lading'],
+                                    adlDesc,  // Use ADL description
+                                    adlHts,   // Use ADL HTS number
+                                    baseRow['Entered Value'],
+                                    adlDuty,  // Use ADL-specific duty
+                                    baseRow['Commercial Invoice Number'],
+                                    baseRow['Liquidation Date']
+                                ];
+                                
+                                outputData.push(adlRow);
+                            }
+                        }
+                    }
+
+                    // Update progress periodically
+                    if (i % 50 === 0) {
+                        const progress = 30 + (i / lines.length) * 40;
+                        updateProgress(progress, `Processing row ${i} of ${lines.length}...`);
+                    }
+                }
+
+                // Calculate total duty amount
+                let totalDuty = 0;
+                for (let i = 1; i < outputData.length; i++) {
+                    const dutyValue = outputData[i][10]; // Duty column is at index 10
+                    if (dutyValue !== '' && dutyValue !== null && dutyValue !== undefined) {
+                        const numValue = parseFloat(dutyValue.toString().replace(/[,$]/g, ''));
+                        if (!isNaN(numValue)) {
+                            totalDuty += numValue;
+                        }
+                    }
+                }
+
+                // Add totals row
+                const totalsRow = Array(outputColumns.length).fill('');
+                totalsRow[0] = 'TOTAL';
+                totalsRow[10] = totalDuty; // Duty column
+                outputData.push(totalsRow);
+
+                updateProgress(75, 'Creating Excel workbook...');
+
+                // Create worksheet
+                const ws = XLSX.utils.aoa_to_sheet(outputData);
+
+                updateProgress(85, 'Applying formatting...');
+
+                // Format the worksheet
                 const range = XLSX.utils.decode_range(ws['!ref']);
                 
-                // Find currency and percentage columns
-                const currencyCols = [];
-                const percentCols = [];
-                
-                outputColumns.forEach((col, idx) => {
-                    if (currencyColumns.includes(col)) {
-                        currencyCols.push(idx);
-                    }
-                    if (col.includes('DutyRate')) {
-                        percentCols.push(idx);
-                    }
-                });
+                // Currency columns (indices)
+                const currencyCols = [9, 10]; // Entered Value, Duty
 
-                // Apply cell formatting with xlsx-js-style
                 for (let R = range.s.r; R <= range.e.r; ++R) {
                     for (let C = range.s.c; C <= range.e.c; ++C) {
                         const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
@@ -672,7 +493,7 @@
 
                         // Initialize cell style
                         ws[cellAddress].s = {
-                            alignment: { vertical: 'center', horizontal: 'left' },
+                            alignment: { vertical: 'center', horizontal: 'left', wrapText: true },
                             border: {
                                 top: { style: 'thin', color: { rgb: 'D0D0D0' } },
                                 bottom: { style: 'thin', color: { rgb: 'D0D0D0' } },
@@ -681,9 +502,8 @@
                             }
                         };
 
-                        // Apply row banding (alternating colors) - skip header (row 0) and totals row (last row)
+                        // Apply row banding (alternating colors) - skip header and totals row
                         if (R > 0 && R < range.e.r) {
-                            // Even rows get light gray background
                             if (R % 2 === 0) {
                                 ws[cellAddress].s.fill = {
                                     fgColor: { rgb: 'F2F2F2' }
@@ -701,7 +521,7 @@
                             ws[cellAddress].s.fill = {
                                 fgColor: { rgb: '4472C4' }
                             };
-                            ws[cellAddress].s.alignment = { vertical: 'center', horizontal: 'center' };
+                            ws[cellAddress].s.alignment = { vertical: 'center', horizontal: 'center', wrapText: true };
                         }
                         
                         // Totals row - bold with yellow background
@@ -724,32 +544,28 @@
                                 }
                             }
                         }
-
-                        // Format percentage columns
-                        if (percentCols.includes(C) && R > 0 && R < range.e.r) {
-                            const value = ws[cellAddress].v;
-                            if (value !== '' && value !== null && value !== undefined) {
-                                const numValue = parseFloat(value.toString().replace(/[%,]/g, ''));
-                                if (!isNaN(numValue)) {
-                                    ws[cellAddress].t = 'n';
-                                    ws[cellAddress].v = numValue;
-                                    ws[cellAddress].z = '0.00%';
-                                }
-                            }
-                        }
                     }
                 }
 
                 // Set column widths
-                const colWidths = outputColumns.map(col => {
-                    if (col.includes('Description')) return { wch: 40 };
-                    if (col.includes('HTS')) return { wch: 15 };
-                    if (col.includes('Date')) return { wch: 12 };
-                    return { wch: 15 };
-                });
+                const colWidths = [
+                    { wch: 12 },  // Broker Ref # (reduced)
+                    { wch: 13 },  // Entry # (autofitted for EF4 + 8 digits)
+                    { wch: 8 },   // Export Country (widened for header readability)
+                    { wch: 12 },  // Export Date
+                    { wch: 8 },   // Origin Country (widened for header readability)
+                    { wch: 12 },  // Entry Date
+                    { wch: 20 },  // Bill of Lading
+                    { wch: 40 },  // Tariff Description
+                    { wch: 12 },  // HTS Code (autofitted for 10-digit codes)
+                    { wch: 13 },  // Entered Value (reduced)
+                    { wch: 12 },  // Duty (optimized for currency)
+                    { wch: 20 },  // Commercial Invoice Number
+                    { wch: 12 }   // Liquidation Date (reduced)
+                ];
                 ws['!cols'] = colWidths;
 
-                // Add autofilter
+                // Add autofilter (exclude totals row)
                 ws['!autofilter'] = { ref: XLSX.utils.encode_range({
                     s: { r: 0, c: 0 },
                     e: { r: outputData.length - 2, c: outputColumns.length - 1 }
@@ -759,117 +575,6 @@
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, 'EDI Data');
 
-                updateProgress(95, 'Creating IEEPA Summary sheet...');
-
-                // Create IEEPA Summary sheet with only HTS Code, Count, Duty Amount
-                const htsSummaryData = [['HTS Code', 'Count', 'Duty Amount']];
-                
-                // Sort HTS codes
-                const sortedHTS = Object.keys(htsSummary).sort();
-                
-                sortedHTS.forEach(htsCode => {
-                    const summary = htsSummary[htsCode];
-                    htsSummaryData.push([
-                        htsCode,
-                        summary.count,
-                        summary.dutyAmount
-                    ]);
-                });
-
-                // Add grand totals
-                const grandTotals = sortedHTS.reduce((acc, htsCode) => {
-                    const summary = htsSummary[htsCode];
-                    acc.count += summary.count;
-                    acc.dutyAmount += summary.dutyAmount;
-                    return acc;
-                }, { count: 0, dutyAmount: 0 });
-
-                htsSummaryData.push(['GRAND TOTAL', grandTotals.count, grandTotals.dutyAmount]);
-
-                const wsSummary = XLSX.utils.aoa_to_sheet(htsSummaryData);
-
-                // Format HTS Summary sheet
-                const summaryRange = XLSX.utils.decode_range(wsSummary['!ref']);
-                
-                for (let R = summaryRange.s.r; R <= summaryRange.e.r; ++R) {
-                    for (let C = summaryRange.s.c; C <= summaryRange.e.c; ++C) {
-                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-                        if (!wsSummary[cellAddress]) continue;
-
-                        // Initialize cell style
-                        wsSummary[cellAddress].s = {
-                            alignment: { vertical: 'center', horizontal: 'left' },
-                            border: {
-                                top: { style: 'thin', color: { rgb: 'D0D0D0' } },
-                                bottom: { style: 'thin', color: { rgb: 'D0D0D0' } },
-                                left: { style: 'thin', color: { rgb: 'D0D0D0' } },
-                                right: { style: 'thin', color: { rgb: 'D0D0D0' } }
-                            }
-                        };
-
-                        // Apply row banding (alternating colors) - skip header (row 0) and grand total row (last row)
-                        if (R > 0 && R < summaryRange.e.r) {
-                            // Even rows get light gray background
-                            if (R % 2 === 0) {
-                                wsSummary[cellAddress].s.fill = {
-                                    fgColor: { rgb: 'F2F2F2' }
-                                };
-                            } else {
-                                wsSummary[cellAddress].s.fill = {
-                                    fgColor: { rgb: 'FFFFFF' }
-                                };
-                            }
-                        }
-                        
-                        // Header row - bold with blue background and white text
-                        if (R === 0) {
-                            wsSummary[cellAddress].s.font = { bold: true, color: { rgb: 'FFFFFF' } };
-                            wsSummary[cellAddress].s.fill = {
-                                fgColor: { rgb: '4472C4' }
-                            };
-                            wsSummary[cellAddress].s.alignment = { vertical: 'center', horizontal: 'center' };
-                        }
-                        
-                        // Grand Total row - bold with yellow background
-                        if (R === summaryRange.e.r) {
-                            wsSummary[cellAddress].s.font = { bold: true };
-                            wsSummary[cellAddress].s.fill = {
-                                fgColor: { rgb: 'FFD966' }
-                            };
-                        }
-
-                        // Format currency column (column 2 = Duty Amount)
-                        if (C === 2 && R > 0) {
-                            const value = wsSummary[cellAddress].v;
-                            if (value !== '' && value !== null && value !== undefined) {
-                                const numValue = parseFloat(value.toString().replace(/[,$]/g, ''));
-                                if (!isNaN(numValue)) {
-                                    wsSummary[cellAddress].t = 'n';
-                                    wsSummary[cellAddress].v = numValue;
-                                    wsSummary[cellAddress].z = '$#,##0.00';
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Set column widths for summary sheet
-                wsSummary['!cols'] = [
-                    { wch: 15 },  // HTS Code
-                    { wch: 10 },  // Count
-                    { wch: 15 }   // Duty Amount
-                ];
-
-                // Add autofilter to summary sheet
-                wsSummary['!autofilter'] = { 
-                    ref: XLSX.utils.encode_range({
-                        s: { r: 0, c: 0 },
-                        e: { r: htsSummaryData.length - 2, c: 2 }  // Exclude grand total from filter
-                    })
-                };
-
-                XLSX.utils.book_append_sheet(wb, wsSummary, 'IEEPA Summary');
-
                 processedWorkbook = wb;
 
                 updateProgress(100, 'Complete!');
@@ -877,7 +582,7 @@
                 setTimeout(() => {
                     progressContainer.classList.remove('active');
                     resultContainer.classList.add('active');
-                    resultMessage.textContent = `Successfully processed ${filteredData.length} rows (${data.length - filteredData.length} blank HTS rows skipped) with ${sortedADL.length} ADL column sets. Created IEEPA Summary with ${Object.keys(htsSummary).length} unique IEEPA HTS codes.`;
+                    resultMessage.textContent = `Successfully processed ${outputData.length - 2} rows (including expanded ADL lines). Total Duty: $${totalDuty.toFixed(2)}`;
                 }, 500);
 
             } catch (error) {
