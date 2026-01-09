@@ -343,6 +343,32 @@
                     colMap[header.trim()] = idx;
                 });
 
+                // Define required columns
+                const requiredColumns = [
+                    'BROKERREFERENCE',
+                    'ENTRYNUMBER',
+                    'COUNTRYOFEXPORT',
+                    'DATEOFEXPORT',
+                    'COUNTRYOFORIGIN',
+                    'ENTRYDATE',
+                    'MASTERBILLNUMBERS',
+                    'HTS_DESCRIPTION',
+                    'HTS_NUMBER',
+                    'ENTEREDVALUE',
+                    'ADVALOREMDUTYAMOUNT',
+                    'INVOICENUMBER',
+                    'LIQUIDATIONDATE'
+                ];
+
+                // Check if all required columns exist
+                const missingColumns = requiredColumns.filter(col => !colMap.hasOwnProperty(col));
+                
+                if (missingColumns.length > 0) {
+                    progressContainer.classList.remove('active');
+                    showError(`CSV file is missing required columns: ${missingColumns.join(', ')}. Please ensure you are using the correct EDI CSV format.`);
+                    return;
+                }
+
                 // Define output columns
                 const outputColumns = [
                     'Broker Ref #',
@@ -465,6 +491,13 @@
                             totalDuty += numValue;
                         }
                     }
+                }
+
+                // Check if any data was actually processed
+                if (outputData.length <= 1) {
+                    progressContainer.classList.remove('active');
+                    showError('No valid data found in CSV file. Please check that the file contains data rows with valid information.');
+                    return;
                 }
 
                 // Add totals row
@@ -613,7 +646,7 @@
             errorMessage.classList.add('active');
             setTimeout(() => {
                 errorMessage.classList.remove('active');
-            }, 5000);
+            }, 10000);
         }
     </script>
 </body>
