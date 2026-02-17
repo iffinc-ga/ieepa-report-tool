@@ -481,15 +481,19 @@
                     }
                 }
 
-                // Calculate total duty amount
+                // Calculate total duty amount and total entered value
                 let totalDuty = 0;
+                let totalEnteredValue = 0;
                 for (let i = 1; i < outputData.length; i++) {
                     const dutyValue = outputData[i][10]; // Duty column is at index 10
                     if (dutyValue !== '' && dutyValue !== null && dutyValue !== undefined) {
                         const numValue = parseFloat(dutyValue.toString().replace(/[,$]/g, ''));
-                        if (!isNaN(numValue)) {
-                            totalDuty += numValue;
-                        }
+                        if (!isNaN(numValue)) totalDuty += numValue;
+                    }
+                    const enteredValue = outputData[i][9]; // Entered Value column is at index 9
+                    if (enteredValue !== '' && enteredValue !== null && enteredValue !== undefined) {
+                        const numValue = parseFloat(enteredValue.toString().replace(/[,$]/g, ''));
+                        if (!isNaN(numValue)) totalEnteredValue += numValue;
                     }
                 }
 
@@ -503,7 +507,8 @@
                 // Add totals row
                 const totalsRow = Array(outputColumns.length).fill('');
                 totalsRow[0] = 'TOTAL';
-                totalsRow[10] = totalDuty; // Duty column
+                totalsRow[9] = totalEnteredValue;  // Entered Value column
+                totalsRow[10] = totalDuty;          // Duty column
                 outputData.push(totalsRow);
 
                 updateProgress(75, 'Creating Excel workbook...');
