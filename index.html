@@ -379,6 +379,7 @@
                     'Origin Country',
                     'Entry Date',
                     'Bill of Lading',
+                    'Manufacturer Name',
                     'Tariff Description',
                     'HTS Code',
                     'Entered Value',
@@ -396,6 +397,7 @@
                     'Origin Country': 'COUNTRYOFORIGIN',
                     'Entry Date': 'ENTRYDATE',
                     'Bill of Lading': 'MASTERBILLNUMBERS',
+                    'Manufacturer Name': 'MANUFACTURERNAME',
                     'Tariff Description': 'HTS_DESCRIPTION',
                     'HTS Code': 'HTS_NUMBER',
                     'Entered Value': 'ENTEREDVALUE',
@@ -462,6 +464,7 @@
                                     baseRow['Origin Country'],
                                     baseRow['Entry Date'],
                                     baseRow['Bill of Lading'],
+                                    baseRow['Manufacturer Name'],
                                     adlDesc,  // Use ADL description
                                     adlHts,   // Use ADL HTS number
                                     baseRow['Entered Value'],
@@ -486,12 +489,12 @@
                 let totalDuty = 0;
                 let totalEnteredValue = 0;
                 for (let i = 1; i < outputData.length; i++) {
-                    const dutyValue = outputData[i][10]; // Duty column is at index 10
+                    const dutyValue = outputData[i][11]; // Duty column is at index 11
                     if (dutyValue !== '' && dutyValue !== null && dutyValue !== undefined) {
                         const numValue = parseFloat(dutyValue.toString().replace(/[,$]/g, ''));
                         if (!isNaN(numValue)) totalDuty += numValue;
                     }
-                    const enteredValue = outputData[i][9]; // Entered Value column is at index 9
+                    const enteredValue = outputData[i][10]; // Entered Value column is at index 10
                     if (enteredValue !== '' && enteredValue !== null && enteredValue !== undefined) {
                         const numValue = parseFloat(enteredValue.toString().replace(/[,$]/g, ''));
                         if (!isNaN(numValue)) totalEnteredValue += numValue;
@@ -508,8 +511,8 @@
                 // Add totals row
                 const totalsRow = Array(outputColumns.length).fill('');
                 totalsRow[0] = 'TOTAL';
-                totalsRow[9] = totalEnteredValue;  // Entered Value column
-                totalsRow[10] = totalDuty;          // Duty column
+                totalsRow[10] = totalEnteredValue;  // Entered Value column
+                totalsRow[11] = totalDuty;          // Duty column
                 outputData.push(totalsRow);
 
                 updateProgress(75, 'Creating Excel workbook...');
@@ -523,7 +526,7 @@
                 const range = XLSX.utils.decode_range(ws['!ref']);
                 
                 // Currency columns (indices)
-                const currencyCols = [9, 10]; // Entered Value, Duty
+                const currencyCols = [10, 11]; // Entered Value, Duty
 
                 for (let R = range.s.r; R <= range.e.r; ++R) {
                     for (let C = range.s.c; C <= range.e.c; ++C) {
@@ -595,6 +598,7 @@
                     { wch: 8 },   // Origin Country (widened for header readability)
                     { wch: 12 },  // Entry Date
                     { wch: 20 },  // Bill of Lading
+                    { wch: 25 },  // Manufacturer Name
                     { wch: 40 },  // Tariff Description
                     { wch: 12 },  // HTS Code (autofitted for 10-digit codes)
                     { wch: 13 },  // Entered Value (reduced)
